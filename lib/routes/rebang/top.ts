@@ -1,13 +1,14 @@
 import { config } from '@/config';
 import type { DataItem, Route } from '@/types';
 import cache from '@/utils/cache';
-import { getPlaywrightPage } from '@/utils/playwright';
+import ofetch from '@/utils/ofetch';
 
 const siteUrl = 'https://rebang.today';
 const pageUrl = `${siteUrl}/home?tab=top`;
 const apiPath = '/api/latest-list';
-const itemSelector = 'article[data-latest-list-item-key]';
 const maxItems = 200;
+const maxPages = 15;
+const pageSize = 20;
 
 type RebangItem = {
     item_key?: string;
@@ -41,7 +42,7 @@ export const route: Route = {
     example: '/rebang/top',
     features: {
         requireConfig: false,
-        requirePuppeteer: true,
+        requirePuppeteer: false,
         antiCrawler: false,
         supportBT: false,
         supportPodcast: false,
@@ -73,72 +74,35 @@ async function handler() {
 }
 
 async function fetchTopItems(): Promise<DataItem[]> {
-    const { page, destroy } = await getPlaywrightPage(pageUrl, { closeTimeout: 0 });
     const pages = new Map<number, LatestListPage>();
-    const pendingResponses: Promise<void>[] = [];
+    let snapshotId: string | undefined;
 
-    page.on('response', (response) => {
-        const responseUrl = new URL(response.url());
-        if (responseUrl.pathname !== apiPath) {
-            return;
+    for (let pageNumber = 1; pageNumber <= maxPages && collectItems(pages).length < maxItems; pageNumber++) {
+        const response = await ofetch<LatestListResponse>(`${siteUrl}${apiPath}`, {
+            query: {
+                tab: 'top',
+                sub_tab: 'today',
+                page: pageNumber,
+                page_size: pageSize,
+                list_mode: 1,
+                ...(snapshotId ? { snapshot_id: snapshotId } : {}),
+            },
+            headers: { referer: pageUrl },
+        });
+
+        if (response.code !== 200 || !response.data?.list) {
+            throw new Error(`今日热榜第 ${pageNumber} 页没有返回有效数据`);
         }
 
-        const pageNumber = Number(responseUrl.searchParams.get('page') ?? 1);
-        pendingResponses.push(
-            response
-                .json()
-                .then((result: LatestListResponse) => {
-                    // The page inserts its ad blocks outside this API list.
-                    if (result.code === 200 && result.data?.list) {
-                        pages.set(pageNumber, result.data);
-                    }
-                })
-                .catch(() => undefined)
-        );
-    });
+        pages.set(pageNumber, response.data);
+        snapshotId ??= response.data.snapshot_id;
 
-    try {
-        await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-        await page.locator(itemSelector).first().waitFor({ state: 'visible', timeout: 20_000 });
-        await Promise.all(pendingResponses);
-
-        if (pages.size === 0) {
-            throw new Error('今日热榜没有返回可读取的榜单数据');
+        if (!response.data.has_more) {
+            break;
         }
-
-        for (let scrolls = 0; scrolls < 15 && collectItems(pages).length < maxItems; scrolls++) {
-            const latestPageNumber = Math.max(...pages.keys());
-            if (!pages.get(latestPageNumber)?.has_more) {
-                break;
-            }
-
-            const previousCount = await page.locator(itemSelector).count();
-            const previousPageCount = pages.size;
-            await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-
-            try {
-                await page.waitForFunction(
-                    ({ selector, count }) => document.querySelectorAll(selector).length > count,
-                    { selector: itemSelector, count: previousCount },
-                    { timeout: 10_000 }
-                );
-            } catch {
-                // A full list or a failed next-page request leaves the visible count unchanged.
-            }
-
-            await Promise.all(pendingResponses.splice(0));
-            if (pages.size === previousPageCount && (await page.locator(itemSelector).count()) <= previousCount) {
-                if (pages.get(Math.max(...pages.keys()))?.has_more) {
-                    throw new Error('今日热榜还有后续分页，但加载下一页失败');
-                }
-                break;
-            }
-        }
-
-        return collectItems(pages).slice(0, maxItems).map((entry, index) => toDataItem(entry, index));
-    } finally {
-        await destroy();
     }
+
+    return collectItems(pages).slice(0, maxItems).map((entry, index) => toDataItem(entry, index));
 }
 
 function collectItems(pages: Map<number, LatestListPage>) {
