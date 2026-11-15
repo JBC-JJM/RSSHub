@@ -4,6 +4,7 @@ import cache from '@/utils/cache';
 import ofetch from '@/utils/ofetch';
 
 const siteUrl = 'https://rebang.today';
+const imageBaseUrl = 'https://img.rebang.today';
 const pageUrl = `${siteUrl}/home?tab=top`;
 const apiPath = '/api/latest-list';
 const maxItems = 200;
@@ -139,7 +140,11 @@ function isAdvertisement(item: RebangItem) {
 
 function toDataItem(item: RebangItem, index: number): DataItem {
     const link = item.www_url || item.mobile_url;
-    const image = item.img && !item.img.includes('/tab_icon/') ? new URL(item.img, siteUrl).href : undefined;
+    const imageUrl = item.img && !item.img.includes('/tab_icon/') ? new URL(item.img, imageBaseUrl) : undefined;
+    if (imageUrl?.hostname === 'rebang.today') {
+        imageUrl.hostname = 'img.rebang.today';
+    }
+    const image = imageUrl?.href;
     const source = typeof item.extra_info?.source_name === 'string' ? item.extra_info.source_name : undefined;
     const metadata = [source, item.label, `排名 ${index + 1}`]
         .filter(Boolean)
