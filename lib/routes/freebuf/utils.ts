@@ -10,7 +10,7 @@ export async function fetchWithAcwChallenge(url, options) {
         return await ofetch(url, options);
     } catch (error) {
         const challengeBody = error instanceof FetchError ? String(error.data) : '';
-        const arg1 = challengeBody.match(/var arg1='(.*?)';/)?.[1];
+        const arg1 = challengeBody.match(/\bvar\s+arg1\s*=\s*['"](.*?)['"];?/)?.[1];
         if (!arg1) {
             if (error instanceof FetchError && error.response?.status === 405) {
                 throw new Error('FreeBuf returned HTTP 405 without the arg1 required by its supported WAF challenge. The public API is currently unavailable from this RSSHub instance.', { cause: error });
