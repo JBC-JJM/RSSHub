@@ -16,26 +16,28 @@ export const route: Route = {
 
 async function handler() {
     const pageSize = 20;
-    const pages = await Promise.all(
-        [1, 2, 3].map((page) =>
-            fetchWithAcwChallenge(`${baseUrl}/fapi/frontend/home/article`, {
-                query: {
-                    page,
-                    limit: pageSize,
-                    type: '1',
-                    day: 7,
-                    category: '精选',
-                },
-                headers: {
-                    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                    referer: `${baseUrl}/`,
-                    'x-client-type': 'web',
-                },
-            })
-        )
-    );
+    const articles = [];
 
-    const articles = pages.flatMap((response) => response.data?.data_list ?? response.data?.list ?? []).slice(0, 50);
+    // Avoid triggering FreeBuf's WAF with concurrent requests from the RSSHub server.
+    for (const page of [1, 2, 3]) {
+        const response = await fetchWithAcwChallenge(`${baseUrl}/fapi/frontend/home/article`, {
+            query: {
+                page,
+                limit: page === 3 ? 10 : pageSize,
+                type: '1',
+                day: 7,
+                category: '精选',
+            },
+            headers: {
+                accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                referer: `${baseUrl}/`,
+                'x-client-type': 'web',
+            },
+        });
+
+        articles.push(...(response.data?.list ?? response.data?.data_list ?? []));
+    }
+
     const items: DataItem[] = articles.map((article) => {
         const image = article.post_image ?? article.post_img ?? article.post_thumb ?? article.post_cover ?? article.cover ?? article.image;
         const link = article.url?.startsWith('http') ? article.url : new URL(article.url ?? '', baseUrl).href;
