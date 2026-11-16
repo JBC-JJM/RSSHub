@@ -15,28 +15,22 @@ export const route: Route = {
 };
 
 async function handler() {
-    const pageSize = 20;
-    const articles = [];
+    const response = await fetchWithAcwChallenge(`${baseUrl}/fapi/frontend/home/article`, {
+        query: {
+            page: 1,
+            limit: 20,
+            type: '1',
+            day: 7,
+            category: '精选',
+        },
+        headers: {
+            accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            referer: `${baseUrl}/`,
+            'x-client-type': 'web',
+        },
+    });
 
-    // Avoid triggering FreeBuf's WAF with concurrent requests from the RSSHub server.
-    for (const page of [1, 2, 3]) {
-        const response = await fetchWithAcwChallenge(`${baseUrl}/fapi/frontend/home/article`, {
-            query: {
-                page,
-                limit: page === 3 ? 10 : pageSize,
-                type: '1',
-                day: 7,
-                category: '精选',
-            },
-            headers: {
-                accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                referer: `${baseUrl}/`,
-                'x-client-type': 'web',
-            },
-        });
-
-        articles.push(...(response.data?.list ?? response.data?.data_list ?? []));
-    }
+    const articles = (response.data?.list ?? response.data?.data_list ?? []).filter((article) => !isAdvertisement(article));
 
     const items: DataItem[] = articles.map((article) => {
         const image = article.post_image ?? article.post_img ?? article.post_thumb ?? article.post_cover ?? article.cover ?? article.image;
@@ -57,4 +51,11 @@ async function handler() {
         link: baseUrl,
         item: items,
     };
+}
+
+function isAdvertisement(article) {
+    const flagged = [article.is_ad, article.isAd, article.advertisement, article.is_job];
+    const type = String(article.source_type ?? article.type ?? '').toLowerCase();
+
+    return flagged.some((value) => value === true || value === 1 || value === '1') || ['ad', 'advertisement', 'job'].includes(type);
 }
