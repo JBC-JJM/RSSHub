@@ -36,7 +36,7 @@ async function handler() {
                         const src = $page('.pcb .t_f img, .pcb img')
                             .toArray()
                             .map((element) => $page(element).attr('zoomfile') ?? $page(element).attr('file') ?? $page(element).attr('src'))
-                            .find((src) => src && !/emoji|smilies|avatar|static\/image\/common/i.test(src));
+                            .find((src) => src && !/emoji|smilies|smiley|avatar|static\/image\/(?:common|smiley)/i.test(src));
 
                         return src ? new URL(src, siteUrl).href : undefined;
                     });
@@ -45,7 +45,7 @@ async function handler() {
                 const description = item.children('description').text();
                 const title = item.children('title').text();
                 const author = item.children('author').text() || item.children().filter((_, element) => element.name.endsWith(':creator')).text();
-                const enclosureType = item.children('enclosure').attr('type') ?? (image ? getImageMimeType(image) : undefined);
+                const enclosureType = image ? getImageMimeType(image) : item.children('enclosure').attr('type');
                 const pubDate = item.children('pubDate').text();
 
                 return {
@@ -58,6 +58,16 @@ async function handler() {
                     image,
                     enclosure_url: image,
                     enclosure_type: enclosureType,
+                    media: image
+                        ? {
+                              content: {
+                                  url: image,
+                                  type: enclosureType ?? 'image/jpeg',
+                                  medium: 'image',
+                              },
+                              thumbnail: { url: image },
+                          }
+                        : undefined,
                 };
             })
     );
@@ -72,5 +82,8 @@ async function handler() {
 
 function getImageMimeType(image: string) {
     const extension = new URL(image).pathname.split('.').pop()?.toLowerCase();
-    return extension === 'jpg' ? 'image/jpeg' : extension ? `image/${extension}` : 'image/jpeg';
+    if (extension === 'jpg' || extension === 'jpeg') {
+        return 'image/jpeg';
+    }
+    return extension ? `image/${extension}` : 'image/jpeg';
 }
