@@ -1,10 +1,7 @@
-import { FetchError } from 'ofetch';
-
 import type { Route } from '@/types';
-import ofetch from '@/utils/ofetch';
 import { parseDate } from '@/utils/parse-date';
 
-import { getAcwScV2ByArg1 } from '../5eplay/utils';
+import { fetchWithAcwChallenge } from './utils';
 
 export const route: Route = {
     path: '/articles/:type',
@@ -70,27 +67,4 @@ async function handler(ctx) {
         link: rssLink,
         item: items,
     };
-}
-
-// Retry the supported Aliyun WAF challenge only when its required arg1 is present.
-async function fetchWithAcwChallenge(url, options) {
-    try {
-        return await ofetch(url, options);
-    } catch (error) {
-        const challengeBody = error instanceof FetchError ? String(error.data) : '';
-        const arg1 = challengeBody.match(/var arg1='(.*?)';/)?.[1];
-        if (!arg1) {
-            if (error instanceof FetchError && error.response?.status === 405) {
-                throw new Error('FreeBuf returned HTTP 405 without the arg1 required by its supported WAF challenge. The public category API is currently unavailable from this RSSHub instance.', { cause: error });
-            }
-            throw error;
-        }
-        return await ofetch(url, {
-            ...options,
-            headers: {
-                ...options.headers,
-                cookie: `acw_sc__v2=${getAcwScV2ByArg1(arg1)}`,
-            },
-        });
-    }
 }

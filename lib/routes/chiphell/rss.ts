@@ -2,7 +2,7 @@ import { load } from 'cheerio';
 import type { DataItem, Route } from '@/types';
 import cache from '@/utils/cache';
 import ofetch from '@/utils/ofetch';
-import parser from '@/utils/rss-parser';
+import { parseDate } from '@/utils/parse-date';
 
 const feedUrl = 'https://www.chiphell.com/forum.php?mod=rss&auth=0';
 const siteUrl = 'https://www.chiphell.com';
@@ -17,50 +17,60 @@ export const route: Route = {
 };
 
 async function handler() {
-    const feed = await parser.parseURL(feedUrl);
+    const xml = await ofetch(feedUrl, { responseType: 'text' });
+    const $ = load(xml, { xmlMode: true });
+    const channel = $('rss > channel');
     const items = await Promise.all(
-        feed.items.map(async (item): Promise<DataItem> => {
-            const link = item.link;
-            let image = item.enclosure_url;
+        channel
+            .children('item')
+            .toArray()
+            .map(async (element): Promise<DataItem> => {
+                const item = $(element);
+                const link = item.children('link').text().trim();
+                let image = item.children('enclosure').attr('url');
 
-            if (!image && link) {
-                image = await cache.tryGet(`chiphell:rss:image:${link}`, async () => {
-                    const html = await ofetch(link);
-                    const $ = load(html);
-                    const src = $('.pcb .t_f img, .pcb img')
-                        .toArray()
-                        .map((element) => $(element).attr('zoomfile') ?? $(element).attr('file') ?? $(element).attr('src'))
-                        .find((src) => src && !/emoji|smilies|avatar|static\/image\/common/i.test(src));
+                if (!image && link) {
+                    image = await cache.tryGet(`chiphell:rss:image:${link}`, async () => {
+                        const html = await ofetch(link);
+                        const $page = load(html);
+                        const src = $page('.pcb .t_f img, .pcb img')
+                            .toArray()
+                            .map((element) => $page(element).attr('zoomfile') ?? $page(element).attr('file') ?? $page(element).attr('src'))
+                            .find((src) => src && !/emoji|smilies|avatar|static\/image\/common/i.test(src));
 
-                    return src ? new URL(src, siteUrl).href : undefined;
-                });
-            }
+                        return src ? new URL(src, siteUrl).href : undefined;
+                    });
+                }
 
-            const description = item.description ?? '';
-            const enclosure = image
-                ? {
-                      image,
-                      enclosure_url: image,
-                      enclosure_type: `image/${image.split('.').pop()?.split(/[?#]/)[0] === 'jpg' ? 'jpeg' : image.split('.').pop()?.split(/[?#]/)[0] ?? 'jpeg'}`,
-                  }
-                : {};
+                const description = item.children('description').text();
+                const title = item.children('title').text();
+                const author = item.children('author').text() || item.children().filter((_, element) => element.name.endsWith(':creator')).text();
+                const enclosureType = item.children('enclosure').attr('type') ?? (image ? getImageMimeType(image) : undefined);
+                const pubDate = item.children('pubDate').text();
 
-            return {
-                title: item.title ?? '',
-                link,
-                description: image && !/<img\b/i.test(description) ? `${description}<p><img src="${image}"></p>` : description,
-                pubDate: item.pubDate,
-                author: item.author,
-                category: item.categories,
-                ...enclosure,
-            };
-        })
+                return {
+                    title,
+                    link,
+                    description: image && !/<img\b/i.test(description) ? `${description}<p><img src="${image}"></p>` : description,
+                    pubDate: pubDate ? parseDate(pubDate) : undefined,
+                    author: author || undefined,
+                    category: item.children('category').toArray().map((category) => $(category).text()),
+                    image,
+                    enclosure_url: image,
+                    enclosure_type: enclosureType,
+                };
+            })
     );
 
     return {
-        title: feed.title ?? 'Chiphell 最新主题',
+        title: channel.children('title').text() || 'Chiphell 最新主题',
         link: siteUrl,
-        description: feed.description,
+        description: channel.children('description').text(),
         item: items,
     };
+}
+
+function getImageMimeType(image: string) {
+    const extension = new URL(image).pathname.split('.').pop()?.toLowerCase();
+    return extension === 'jpg' ? 'image/jpeg' : extension ? `image/${extension}` : 'image/jpeg';
 }

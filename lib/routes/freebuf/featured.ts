@@ -1,6 +1,7 @@
 import type { DataItem, Route } from '@/types';
-import ofetch from '@/utils/ofetch';
 import { parseDate } from '@/utils/parse-date';
+
+import { fetchWithAcwChallenge } from './utils';
 
 const baseUrl = 'https://www.freebuf.com';
 
@@ -17,7 +18,7 @@ async function handler() {
     const pageSize = 20;
     const pages = await Promise.all(
         [1, 2, 3].map((page) =>
-            ofetch(`${baseUrl}/fapi/frontend/home/article`, {
+            fetchWithAcwChallenge(`${baseUrl}/fapi/frontend/home/article`, {
                 query: {
                     page,
                     limit: pageSize,
