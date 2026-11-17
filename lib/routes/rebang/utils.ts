@@ -49,6 +49,8 @@ type FeedOptions = {
     pageSize: number;
     category: string;
     defaultSource?: SourceTab;
+    /** Append the board's own metadata (rating, category/author line) to `description`. */
+    includeExtraInfo?: boolean;
 };
 
 export async function fetchRebangItems(options: FeedOptions): Promise<DataItem[]> {
@@ -134,8 +136,10 @@ function toDataItem(item: RebangItem, sourceTabs: Map<string, SourceTab>, option
     const iconUrl = iconPath || (sourceKey ? `forever/tab_icon/${sourceKey}.png` : undefined);
     const mainImage = item.img && !item.img.includes('/tab_icon/') ? item.img : undefined;
     const image = mainImage ? resolveImageUrl(mainImage, imageBaseUrl) : resolveIconImageUrl(iconUrl);
+    const extraLines = options.includeExtraInfo ? formatExtraInfo(extra) : [];
     const description = [
         item.desc ? `<p>${escapeHtml(item.desc).replace(/\r?\n/g, '<br>')}</p>` : '',
+        extraLines.length > 0 ? `<p>${extraLines.map((line) => escapeHtml(line)).join('<br>')}</p>` : '',
         image ? `<p><img src="${escapeHtml(image)}" alt="${escapeHtml(item.title)}"></p>` : '',
     ].join('');
     const publishTime = item.publish_time;
@@ -184,6 +188,27 @@ function resolveImageUrl(imagePath: string | undefined, baseUrl: string) {
     }
 
     return imageUrl.href;
+}
+
+function formatExtraInfo(extra: Record<string, unknown>): string[] {
+    const lines: string[] = [];
+
+    const rating = extra.display_rating as { text?: string; evaluation_count?: string } | undefined;
+    if (rating?.text) {
+        lines.push(rating.evaluation_count ? `评分：${rating.text}（${rating.evaluation_count} 人评价）` : `评分：${rating.text}`);
+    }
+
+    const textItems = extra.display_text_items;
+    if (Array.isArray(textItems)) {
+        for (const entry of textItems) {
+            const text = (entry as { text?: unknown } | undefined)?.text;
+            if (typeof text === 'string' && text.length > 0) {
+                lines.push(text);
+            }
+        }
+    }
+
+    return lines;
 }
 
 function escapeHtml(value: string) {
