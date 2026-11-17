@@ -37,15 +37,27 @@ async function handler(ctx) {
             .map((i): DataItem | null => {
                 const item = $(i);
                 const itemScore = Number(item.attr('data-score')) || 0;
-                return itemScore >= score
-                    ? {
-                          title: item.attr('data-title')!,
-                          description: `评分：${itemScore}<br>片长：${item.attr('data-duration')}<br>制片国家/地区：${item.attr('data-region')}<br>导演：${item.attr(
-                              'data-director'
-                          )}<br>主演：${item.attr('data-actors')}<br><img src="${item.find('.poster img').attr('src')}">`,
-                          link: `https://movie.douban.com/subject/${item.attr('id')}`,
-                      }
-                    : null;
+                if (itemScore < score) {
+                    return null;
+                }
+
+                const image = item.find('.poster img').attr('src');
+
+                return {
+                    title: item.attr('data-title')!,
+                    description: `评分：${itemScore}<br>片长：${item.attr('data-duration')}<br>制片国家/地区：${item.attr('data-region')}<br>导演：${item.attr(
+                        'data-director'
+                    )}<br>主演：${item.attr('data-actors')}<br>${image ? `<img src="${image}">` : ''}`,
+                    link: `https://movie.douban.com/subject/${item.attr('id')}`,
+                    image,
+                    enclosure_type: image ? 'image/jpeg' : undefined,
+                    media: image
+                        ? {
+                              content: { url: image, type: 'image/jpeg', medium: 'image' },
+                              thumbnail: { url: image },
+                          }
+                        : undefined,
+                };
             })
             .filter((item) => item !== null),
     };
