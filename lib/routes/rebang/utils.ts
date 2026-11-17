@@ -142,7 +142,7 @@ function toDataItem(item: RebangItem, sourceTabs: Map<string, SourceTab>, option
         extraLines.length > 0 ? `<p>${extraLines.map((line) => escapeHtml(line)).join('<br>')}</p>` : '',
         image ? `<p><img src="${escapeHtml(image)}" alt="${escapeHtml(item.title)}"></p>` : '',
     ].join('');
-    const publishTime = item.publish_time;
+    const publishTime = item.publish_time ?? readTimestamp(extra);
 
     return {
         title: source ? `${source}：${item.title}` : item.title,
@@ -188,6 +188,15 @@ function resolveImageUrl(imagePath: string | undefined, baseUrl: string) {
     }
 
     return imageUrl.href;
+}
+
+function readTimestamp(extra: Record<string, unknown>): number | undefined {
+    for (const value of [extra.publish_timestamp, extra.publish_time]) {
+        if (typeof value === 'number') {
+            return value;
+        }
+    }
+    return undefined;
 }
 
 function formatExtraInfo(extra: Record<string, unknown>): string[] {
