@@ -1,8 +1,10 @@
+import { load } from 'cheerio';
+
 import { config } from '@/config';
-import type { Data, Route } from '@/types';
+import type { Data, DataItem, Route } from '@/types';
 import cache from '@/utils/cache';
 import ofetch from '@/utils/ofetch';
-import RSSParser from '@/utils/rss-parser';
+import { parseDate } from '@/utils/parse-date';
 
 import { classifyWelfareTitle } from './utils';
 
@@ -50,19 +52,35 @@ async function handler(): Promise<Data> {
         config.cache.routeExpire
     );
 
-    const feed = await RSSParser.parseString(xml);
+    const $ = load(xml, { xmlMode: true });
+    const channel = $('rss > channel');
 
-    const item = feed.items
-        .filter((entry) => !classifyWelfareTitle(entry.title ?? '').skip)
-        .map((entry) => ({
-            title: entry.title,
-            link: entry.link,
-            guid: entry.guid ?? entry.link,
-            description: entry.content ?? entry.contentSnippet,
-            pubDate: entry.pubDate ? new Date(entry.pubDate) : undefined,
-            author: entry.creator,
-            category: entry.categories,
-        }));
+    const item: DataItem[] = channel
+        .children('item')
+        .toArray()
+        .map((element) => {
+            const entry = $(element);
+            const link = entry.children('link').text().trim();
+            const pubDate = entry.children('pubDate').text().trim();
+
+            return {
+                title: entry.children('title').text().trim(),
+                link,
+                guid: entry.children('guid').text().trim() || link,
+                description: entry.children('description').text(),
+                pubDate: pubDate ? parseDate(pubDate) : undefined,
+                author: entry
+                    .children()
+                    .filter((_, child) => child.name.endsWith(':creator'))
+                    .text()
+                    .trim() || undefined,
+                category: entry
+                    .children('category')
+                    .toArray()
+                    .map((category) => $(category).text()),
+            };
+        })
+        .filter((entry) => !classifyWelfareTitle(entry.title ?? '').skip);
 
     return {
         title: 'Linux.do - 福利羊毛（已过滤 AI 中转/赠送）',
