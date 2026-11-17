@@ -133,7 +133,7 @@ function toDataItem(item: RebangItem, sourceTabs: Map<string, SourceTab>, option
     const iconPath = sourceTab?.avatar || sourceTab?.avatar_dark || (sourceKey === options.defaultSource?.tab_key ? options.defaultSource?.avatar : undefined);
     const iconUrl = iconPath || (sourceKey ? `forever/tab_icon/${sourceKey}.png` : undefined);
     const mainImage = item.img && !item.img.includes('/tab_icon/') ? item.img : undefined;
-    const image = mainImage ? resolveImageUrl(mainImage, imageBaseUrl) : resolveImageUrl(iconUrl, iconBaseUrl);
+    const image = mainImage ? resolveImageUrl(mainImage, imageBaseUrl) : resolveIconImageUrl(iconUrl);
     const description = [
         item.desc ? `<p>${escapeHtml(item.desc).replace(/\r?\n/g, '<br>')}</p>` : '',
         image ? `<p><img src="${escapeHtml(image)}" alt="${escapeHtml(item.title)}"></p>` : '',
@@ -146,11 +146,31 @@ function toDataItem(item: RebangItem, sourceTabs: Map<string, SourceTab>, option
         guid: item.item_key || link || item.title,
         description,
         image,
+        enclosure_type: !mainImage && image ? 'image/jpeg' : undefined,
         pubDate: publishTime
             ? new Date(publishTime < 1_000_000_000_000 ? publishTime * 1000 : publishTime)
             : undefined,
         category: source ? [options.category, source] : [options.category],
     };
+}
+
+function resolveIconImageUrl(iconPath: string | undefined) {
+    const iconUrl = resolveImageUrl(iconPath, iconBaseUrl);
+    if (!iconUrl) {
+        return undefined;
+    }
+
+    const params = new URLSearchParams({
+        url: iconUrl,
+        w: '256',
+        h: '256',
+        fit: 'contain',
+        bg: 'ffffff',
+        cbg: 'ffffff',
+        output: 'jpg',
+    });
+
+    return `https://images.weserv.nl/?${params}`;
 }
 
 function resolveImageUrl(imagePath: string | undefined, baseUrl: string) {
