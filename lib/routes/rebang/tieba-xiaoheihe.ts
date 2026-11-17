@@ -1,8 +1,8 @@
 import { config } from '@/config';
-import type { DataItem, Route } from '@/types';
+import type { Route } from '@/types';
 import cache from '@/utils/cache';
 
-import { fetchRebangItems } from './utils';
+import { fetchRebangItems, sortByPublishedAt } from './utils';
 
 const tiebaPageUrl = 'https://rebang.today/?tab=baidu-tieba';
 const xiaoheihePageUrl = 'https://rebang.today/ent?tab=xiaoheihe';
@@ -33,7 +33,7 @@ export const route: Route = {
     maintainers: ['JBC-JJM'],
     handler,
     url: 'rebang.today',
-    description: '合并贴吧和小黑盒热榜，按发布时间排列，每个榜单最多 20 条。',
+    description: '合并贴吧和小黑盒热榜，按发布时间排列，贴吧最多 30 条、小黑盒最多 20 条。',
 };
 
 async function handler() {
@@ -45,9 +45,9 @@ async function handler() {
                     tab: 'baidu-tieba',
                     subTab: 'topic',
                     pageUrl: tiebaPageUrl,
-                    maxItems: 20,
-                    maxPages: 5,
-                    pageSize: 20,
+                    maxItems: 30,
+                    maxPages: 1,
+                    pageSize: 30,
                     category: '贴吧热榜',
                     defaultSource: {
                         tab_key: 'baidu-tieba',
@@ -71,7 +71,7 @@ async function handler() {
                 }),
             ]);
 
-            return [...tiebaItems, ...xiaoheiheItems].sort((left, right) => getPublishedAt(right) - getPublishedAt(left));
+            return sortByPublishedAt([...tiebaItems, ...xiaoheiheItems]);
         },
         config.cache.routeExpire,
         false
@@ -79,16 +79,9 @@ async function handler() {
 
     return {
         title: '今日热榜 - 贴吧与小黑盒热榜',
-        description: '贴吧和小黑盒热榜合并订阅，每个榜单最多收录 20 条。',
+        description: '贴吧和小黑盒热榜合并订阅，贴吧最多收录 30 条、小黑盒最多 20 条。',
         link: 'https://rebang.today/',
         language: 'zh-CN' as const,
         item,
     };
-}
-
-function getPublishedAt(item: DataItem) {
-    if (item.pubDate instanceof Date) {
-        return item.pubDate.getTime();
-    }
-    return item.pubDate ? new Date(item.pubDate).getTime() : 0;
 }

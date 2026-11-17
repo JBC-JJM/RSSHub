@@ -27,7 +27,7 @@ export const route: Route = {
     maintainers: ['JBC-JJM'],
     handler,
     url: 'rebang.today',
-    description: '贴吧热榜，最多返回前 20 条；无榜单图片时使用贴吧图标。',
+    description: '贴吧热榜，最多返回前 30 条；无榜单图片时使用贴吧图标。',
 };
 
 async function handler() {
@@ -38,9 +38,9 @@ async function handler() {
                 tab: 'baidu-tieba',
                 subTab: 'topic',
                 pageUrl,
-                maxItems: 20,
-                maxPages: 5,
-                pageSize: 20,
+                maxItems: 30,
+                maxPages: 1,
+                pageSize: 30,
                 category: '贴吧热榜',
                 defaultSource: {
                     tab_key: 'baidu-tieba',
@@ -54,7 +54,7 @@ async function handler() {
 
     return {
         title: '今日热榜 - 贴吧热榜',
-        description: '今日热榜贴吧榜单，最多收录前 20 条。',
+        description: '今日热榜贴吧榜单，最多收录前 30 条。',
         link: pageUrl,
         language: 'zh-CN' as const,
         item,

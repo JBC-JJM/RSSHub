@@ -190,6 +190,21 @@ function resolveImageUrl(imagePath: string | undefined, baseUrl: string) {
     return imageUrl.href;
 }
 
+/**
+ * Sort merged feeds newest first. Entries without a publish date (ranking-only boards
+ * such as tieba) keep their relative order and end up after the dated ones.
+ */
+export function sortByPublishedAt(items: DataItem[]): DataItem[] {
+    return [...items].sort((left, right) => publishedAt(right) - publishedAt(left));
+}
+
+function publishedAt(item: DataItem): number {
+    if (item.pubDate instanceof Date) {
+        return item.pubDate.getTime();
+    }
+    return item.pubDate ? new Date(item.pubDate).getTime() : 0;
+}
+
 function readTimestamp(extra: Record<string, unknown>): number | undefined {
     for (const value of [extra.publish_timestamp, extra.publish_time]) {
         if (typeof value === 'number') {
