@@ -51,6 +51,8 @@ type FeedOptions = {
     defaultSource?: SourceTab;
     /** Append the board's own metadata (rating, category/author line) to `description`. */
     includeExtraInfo?: boolean;
+    /** Milliseconds to wait before every page after the first; the API rejects rapid pagination. */
+    pageDelayMs?: number;
 };
 
 export async function fetchRebangItems(options: FeedOptions): Promise<DataItem[]> {
@@ -58,6 +60,10 @@ export async function fetchRebangItems(options: FeedOptions): Promise<DataItem[]
     let snapshotId: string | undefined;
 
     for (let pageNumber = 1; pageNumber <= options.maxPages && collectItems(pages).length < options.maxItems; pageNumber++) {
+        if (pageNumber > 1 && options.pageDelayMs) {
+            await sleep(options.pageDelayMs);
+        }
+
         const response = await ofetch<LatestListResponse>(`${siteUrl}${apiPath}`, {
             query: {
                 tab: options.tab,
@@ -203,6 +209,12 @@ function publishedAt(item: DataItem): number {
         return item.pubDate.getTime();
     }
     return item.pubDate ? new Date(item.pubDate).getTime() : 0;
+}
+
+function sleep(ms: number) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
 }
 
 function readTimestamp(extra: Record<string, unknown>): number | undefined {

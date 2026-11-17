@@ -27,7 +27,7 @@ export const route: Route = {
     maintainers: ['JBC-JJM'],
     handler,
     url: 'rebang.today',
-    description: '全站综合热榜，最多返回前 200 条；无榜单图片时使用来源应用图标。',
+    description: '全站综合热榜，最多返回前 100 条；无榜单图片时使用来源应用图标。',
 };
 
 async function handler() {
@@ -38,9 +38,10 @@ async function handler() {
                 tab: 'top',
                 subTab: 'today',
                 pageUrl,
-                maxItems: 200,
-                maxPages: 15,
-                pageSize: 20,
+                maxItems: 100,
+                maxPages: 3,
+                pageSize: 50,
+                pageDelayMs: 1000,
                 category: '全站热榜',
             }),
         config.cache.routeExpire,
@@ -49,7 +50,7 @@ async function handler() {
 
     return {
         title: '今日热榜 - 全站综合热榜',
-        description: '今日热榜全站综合榜单，最多收录前 200 条。',
+        description: '今日热榜全站综合榜单，最多收录前 100 条。',
         link: pageUrl,
         language: 'zh-CN' as const,
         item,
