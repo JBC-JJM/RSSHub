@@ -1,8 +1,7 @@
-import { config } from '@/config';
 import type { Route } from '@/types';
 import cache from '@/utils/cache';
 
-import { fetchRebangItems } from './utils';
+import { fetchRebangItems, REBANG_CACHE_SECONDS } from './utils';
 
 const pageUrl = 'https://rebang.today/ent?tab=xiaoheihe';
 
@@ -49,7 +48,7 @@ async function handler() {
                     avatar: 'forever/tab_icon/xiaoheihe.png',
                 },
             }),
-        config.cache.routeExpire,
+        REBANG_CACHE_SECONDS,
         false
     );
 

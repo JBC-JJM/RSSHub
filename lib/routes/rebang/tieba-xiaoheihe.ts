@@ -1,8 +1,7 @@
-import { config } from '@/config';
 import type { Route } from '@/types';
 import cache from '@/utils/cache';
 
-import { fetchRebangItems, sortByPublishedAt } from './utils';
+import { fetchRebangItems, REBANG_CACHE_SECONDS, sortByPublishedAt } from './utils';
 
 const tiebaPageUrl = 'https://rebang.today/?tab=baidu-tieba';
 const xiaoheihePageUrl = 'https://rebang.today/ent?tab=xiaoheihe';
@@ -73,7 +72,7 @@ async function handler() {
 
             return sortByPublishedAt([...tiebaItems, ...xiaoheiheItems]);
         },
-        config.cache.routeExpire,
+        REBANG_CACHE_SECONDS,
         false
     );
 

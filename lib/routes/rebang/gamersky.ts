@@ -1,8 +1,7 @@
-import { config } from '@/config';
 import type { Data, Route } from '@/types';
 import cache from '@/utils/cache';
 
-import { fetchRebangItems } from './utils';
+import { fetchRebangItems, REBANG_CACHE_SECONDS } from './utils';
 
 const pageUrl = 'https://rebang.today/home?tab=gamersky';
 
@@ -49,7 +48,7 @@ async function handler(): Promise<Data> {
                     avatar: 'forever/tab_icon/gamersky.png',
                 },
             }),
-        config.cache.routeExpire,
+        REBANG_CACHE_SECONDS,
         false
     );
 

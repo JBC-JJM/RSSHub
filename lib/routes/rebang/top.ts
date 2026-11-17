@@ -1,7 +1,6 @@
-import { config } from '@/config';
 import type { Route } from '@/types';
 import cache from '@/utils/cache';
-import { fetchRebangItems } from './utils';
+import { fetchRebangItems, REBANG_CACHE_SECONDS } from './utils';
 
 const pageUrl = 'https://rebang.today/home?tab=top';
 
@@ -44,7 +43,7 @@ async function handler() {
                 pageDelayMs: 1000,
                 category: '全站热榜',
             }),
-        config.cache.routeExpire,
+        REBANG_CACHE_SECONDS,
         false
     );
 

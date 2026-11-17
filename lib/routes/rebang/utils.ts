@@ -1,3 +1,4 @@
+import { config } from '@/config';
 import type { DataItem } from '@/types';
 import ofetch from '@/utils/ofetch';
 
@@ -64,26 +65,12 @@ export async function fetchRebangItems(options: FeedOptions): Promise<DataItem[]
             await sleep(options.pageDelayMs);
         }
 
-        const response = await ofetch<LatestListResponse>(`${siteUrl}${apiPath}`, {
-            query: {
-                tab: options.tab,
-                sub_tab: options.subTab,
-                page: pageNumber,
-                page_size: options.pageSize,
-                list_mode: 1,
-                ...(snapshotId ? { snapshot_id: snapshotId } : {}),
-            },
-            headers: { referer: options.pageUrl },
-        });
+        const data = await fetchPage(options, pageNumber, snapshotId);
 
-        if (response.code !== 200 || !response.data?.list) {
-            throw new Error(`今日热榜第 ${pageNumber} 页没有返回有效数据`);
-        }
+        pages.set(pageNumber, data);
+        snapshotId ??= data.snapshot_id;
 
-        pages.set(pageNumber, response.data);
-        snapshotId ??= response.data.snapshot_id;
-
-        if (!response.data.has_more) {
+        if (!data.has_more) {
             break;
         }
     }
@@ -98,6 +85,57 @@ export async function fetchRebangItems(options: FeedOptions): Promise<DataItem[]
     return collectItems(pages)
         .slice(0, options.maxItems)
         .map((item) => toDataItem(item, sourceTabs, options));
+}
+
+/**
+ * The board itself refreshes roughly every ten minutes, so caching for the same window
+ * keeps our upstream traffic low without serving visibly stale rankings.
+ */
+export const REBANG_CACHE_SECONDS = 10 * 60;
+
+const PAGE_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 800;
+
+/**
+ * Request one page, retrying a couple of times. The board throttles in bursts and answers
+ * `code 1001` when pages arrive too quickly, so a short backoff is cheaper than a 500.
+ */
+async function fetchPage(options: FeedOptions, pageNumber: number, snapshotId: string | undefined): Promise<LatestListPage> {
+    let lastError: unknown = new Error(`今日热榜第 ${pageNumber} 页没有返回有效数据`);
+
+    for (let attempt = 1; attempt <= PAGE_ATTEMPTS; attempt++) {
+        if (attempt > 1) {
+            await sleep(RETRY_BASE_DELAY_MS * (attempt - 1));
+        }
+
+        try {
+            const response = await ofetch<LatestListResponse>(`${siteUrl}${apiPath}`, {
+                query: {
+                    tab: options.tab,
+                    sub_tab: options.subTab,
+                    page: pageNumber,
+                    page_size: options.pageSize,
+                    list_mode: 1,
+                    ...(snapshotId ? { snapshot_id: snapshotId } : {}),
+                },
+                headers: {
+                    referer: options.pageUrl,
+                    accept: 'application/json',
+                    'user-agent': config.ua,
+                },
+            });
+
+            if (response.code === 200 && response.data?.list) {
+                return response.data;
+            }
+
+            lastError = new Error(`今日热榜第 ${pageNumber} 页没有返回有效数据（code ${response.code}）`);
+        } catch (error) {
+            lastError = error;
+        }
+    }
+
+    throw lastError;
 }
 
 function collectItems(pages: Map<number, LatestListPage>) {

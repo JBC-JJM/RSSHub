@@ -1,7 +1,7 @@
-import { config } from '@/config';
 import type { Route } from '@/types';
 import cache from '@/utils/cache';
-import { fetchRebangItems } from './utils';
+
+import { fetchRebangItems, REBANG_CACHE_SECONDS } from './utils';
 
 const pageUrl = 'https://rebang.today/?tab=baidu-tieba';
 
@@ -48,7 +48,7 @@ async function handler() {
                     avatar: 'forever/tab_icon/baidu-tieba.png',
                 },
             }),
-        config.cache.routeExpire,
+        REBANG_CACHE_SECONDS,
         false
     );
 
