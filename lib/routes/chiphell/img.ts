@@ -38,7 +38,7 @@ async function handler(ctx: Context): Promise<Data | Response> {
     }
 
     try {
-        const body = await ofetch<ArrayBuffer, 'arrayBuffer'>(target.href, {
+        const response = await ofetch.raw<ArrayBuffer, 'arrayBuffer'>(target.href, {
             responseType: 'arrayBuffer',
             // A rejected request is a definitive answer, not a transient failure.
             retry: 0,
@@ -46,10 +46,13 @@ async function handler(ctx: Context): Promise<Data | Response> {
                 referer: 'https://www.chiphell.com/',
             },
         });
-        return new Response(body as BodyInit, {
+        // Covers are often PNG screenshots; serving those as image/jpeg makes strict clients
+        // (including feed reader thumbnail services) fail to decode them.
+        const contentType = normalizeImageType(response.headers.get('content-type')) ?? typeFromPath(target.pathname);
+        return new Response(response._data as BodyInit, {
             status: 200,
             headers: {
-                'Content-Type': 'image/jpeg',
+                'Content-Type': contentType,
                 'Cache-Control': `public, max-age=${CACHE_SECONDS}`,
                 'X-Content-Type-Options': 'nosniff',
             },
@@ -57,5 +60,31 @@ async function handler(ctx: Context): Promise<Data | Response> {
     } catch {
         // Do not forward the upstream status: a 567 would tell readers to cache the failure.
         return new Response('Failed to fetch image', { status: 502 });
+    }
+}
+
+/** Keeps only image content types, so an HTML block page never gets served as an image. */
+function normalizeImageType(header: string | null) {
+    if (!header) {
+        return undefined;
+    }
+    const mime = header.split(';')[0].trim().toLowerCase();
+    return mime.startsWith('image/') ? mime : undefined;
+}
+
+function typeFromPath(pathname: string) {
+    const extension = pathname.split('.').pop()?.toLowerCase();
+    switch (extension) {
+        case 'png':
+            return 'image/png';
+        case 'gif':
+            return 'image/gif';
+        case 'webp':
+            return 'image/webp';
+        case 'jpg':
+        case 'jpeg':
+            return 'image/jpeg';
+        default:
+            return 'image/jpeg';
     }
 }
