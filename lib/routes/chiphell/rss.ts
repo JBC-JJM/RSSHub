@@ -1,4 +1,6 @@
 import { load } from 'cheerio';
+import type { Context } from 'hono';
+
 import type { DataItem, Route } from '@/types';
 import cache from '@/utils/cache';
 import ofetch from '@/utils/ofetch';
@@ -6,6 +8,10 @@ import { parseDate } from '@/utils/parse-date';
 
 const feedUrl = 'https://www.chiphell.com/forum.php?mod=rss&auth=0';
 const siteUrl = 'https://www.chiphell.com';
+
+// chiphell's WAF rejects some image-proxy user agents with a 567, which leaves feed reader
+// thumbnails blank. Routing covers through this deployment avoids that check.
+const coverHost = 'static.chiphell.com';
 
 export const route: Route = {
     path: '/rss',
@@ -16,7 +22,8 @@ export const route: Route = {
     handler,
 };
 
-async function handler() {
+async function handler(ctx: Context) {
+    const origin = new URL(ctx.req.url).origin;
     const xml = await ofetch(feedUrl, { responseType: 'text' });
     const $ = load(xml, { xmlMode: true });
     const channel = $('rss > channel');
@@ -47,25 +54,28 @@ async function handler() {
                 const author = item.children('author').text() || item.children().filter((_, element) => element.name.endsWith(':creator')).text();
                 const enclosureType = image ? getImageMimeType(image) : item.children('enclosure').attr('type');
                 const pubDate = item.children('pubDate').text();
+                // Point every image reference at this deployment so readers that cannot reach
+                // chiphell directly still get a cover.
+                const proxiedImage = image ? proxyImage(origin, image) : undefined;
 
                 return {
                     title,
                     link,
-                    description: image && !/<img\b/i.test(description) ? `${description}<p><img src="${image}"></p>` : description,
+                    description: proxiedImage && !/<img\b/i.test(description) ? `${description}<p><img src="${proxiedImage}"></p>` : description,
                     pubDate: pubDate ? parseDate(pubDate) : undefined,
                     author: author || undefined,
                     category: item.children('category').toArray().map((category) => $(category).text()),
-                    image,
-                    enclosure_url: image,
+                    image: proxiedImage,
+                    enclosure_url: proxiedImage,
                     enclosure_type: enclosureType,
-                    media: image
+                    media: proxiedImage
                         ? {
                               content: {
-                                  url: image,
+                                  url: proxiedImage,
                                   type: enclosureType ?? 'image/jpeg',
                                   medium: 'image',
                               },
-                              thumbnail: { url: image },
+                              thumbnail: { url: proxiedImage },
                           }
                         : undefined,
                 };
@@ -86,4 +96,18 @@ function getImageMimeType(image: string) {
         return 'image/jpeg';
     }
     return extension ? `image/${extension}` : 'image/jpeg';
+}
+
+/** Rewrites a chiphell cover URL to go through this deployment; leaves other hosts untouched. */
+function proxyImage(origin: string, image: string) {
+    let parsed: URL;
+    try {
+        parsed = new URL(image);
+    } catch {
+        return image;
+    }
+    if (parsed.hostname !== coverHost) {
+        return image;
+    }
+    return `${origin}/chiphell/img?url=${encodeURIComponent(parsed.href)}`;
 }
