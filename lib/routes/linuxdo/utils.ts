@@ -60,14 +60,59 @@ const strongKeywords = [
     '已失效',
     '已过期',
     'token',
+    // Expired / finished giveaways: worth nothing once the quota is gone.
+    '已无',
+    '已结束',
+    '已完结',
+    '已领完',
+    '已抢完',
+    '已兑完',
+    '已发完',
+    '已送完',
+    '已截止',
+    '已关闭',
+    '已下架',
+    '名额已满',
+    '已拉闸',
+    '已开奖',
+    // Giveaway / farming verbs and nouns that only appear in credit-farming posts.
+    'team',
+    '蹬',
+    '号池',
+    '送点',
+    '速蹬',
+    '注册送',
 ];
 
 /**
  * Model, product and vendor names. In this category a title that names a model is
  * almost always a free-credit announcement, so it counts as decisive on its own.
+ * The trailing `(?![a-z])` instead of `\b` is deliberate: versioned names such as
+ * `gpt6.2`, `gpt4o` and `claude3` put a digit right after the brand, where `\b` fails.
+ *
+ * `chatgpt` must be listed explicitly: `gpt` is preceded by a letter there, so neither
+ * `\b` nor the lookahead would match it inside `chatgpt`.
+ *
+ * Subscription tier words (`premium`, `ultra`) are included because AI plan giveaways
+ * are often titled by tier alone, e.g. "抽个 Premium 名额". `plus` and `max` are
+ * deliberately absent: they are just as often e-commerce loyalty tiers (京东 Plus,
+ * 山姆 Max), so they live in `ambiguousTierPattern` instead.
  */
 const aiBrandPattern =
-    /\b(?:ai|api|gpt|claude|gemini|deepseek|glm|qwen|kimi|grok|llama|llm|token|codex|sora|qoder|cursor|copilot|windsurf|cline|sonnet|opus)\b|智谱|通义|豆包|元宝|文心|混元|星火|可灵|硅基流动|火山方舟/;
+    /\b(?:chatgpt|ai|api|gpt|claude|gemini|deepseek|glm|qwen|kimi|grok|llama|llm|token|codex|sora|qoder|cursor|copilot|windsurf|cline|sonnet|opus|minimax|sol|premium|ultra)(?![a-z])|智谱|通义|豆包|元宝|文心|混元|星火|可灵|硅基流动|火山方舟|阶跃星辰|谷歌|海螺/;
+
+/**
+ * Tier words that could belong to either an AI plan or a shopping membership.
+ * They only count as AI noise when the title also carries an AI context word.
+ */
+const ambiguousTierPattern = /\b(?:plus|max)\b/i;
+
+/**
+ * Giveaway phrasing: "抽 N 个名额", "抽奖", "开奖", "roll N".
+ * On its own this is not decisive — banks and carriers run real lotteries — so it is
+ * combined with `aiContextPattern` or a brand name, the same way `weakKeywords` is.
+ */
+const giveawayPattern = /抽\s*\d+\s*个|抽奖|抽取|开奖|名额|roll\s*\d+/i;
 
 /**
  * Generic words that only mean "AI freebie" when combined with one of the patterns above.
@@ -97,6 +142,18 @@ export function classifyWelfareTitle(rawTitle: string): WelfareVerdict {
 
     if (aiBrandPattern.test(title)) {
         return { skip: true, reason: 'brand' };
+    }
+
+    // A lottery only counts as AI noise when the title also talks about models/relay,
+    // otherwise bank and carrier campaigns ("中国银行 2233 卡抽奖活动") would be dropped.
+    if (giveawayPattern.test(title) && aiContextPattern.test(title)) {
+        return { skip: true, reason: 'giveaway+ai' };
+    }
+
+    // "Plus" is a coin flip between an AI plan and a shopping membership, so it needs
+    // an explicit AI context word ("ChatGPT Plus", "Plus 会员 模型").
+    if (ambiguousTierPattern.test(title) && aiContextPattern.test(title)) {
+        return { skip: true, reason: 'tier+ai' };
     }
 
     const weakHit = weakKeywords.find((keyword) => title.includes(keyword));
