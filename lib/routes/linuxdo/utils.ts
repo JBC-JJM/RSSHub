@@ -75,6 +75,11 @@ const strongKeywords = [
     '名额已满',
     '已拉闸',
     '已开奖',
+    // Colloquial "gone / taken" wording. Kept as separate short tokens because titles
+    // use them bare ("已没了", "无了"), but they are common enough that they also match
+    // inside ordinary sentences — see the note on `strongKeywords` matching below.
+    '没了',
+    '无了',
     // Giveaway / farming verbs and nouns that only appear in credit-farming posts.
     'team',
     '蹬',
